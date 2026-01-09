@@ -1,6 +1,7 @@
 {
   "name": "braintrade-ai-evaluator",
   "version": "1.0.0",
+  "homepage": ".",
   "type": "module",
   "scripts": {
     "dev": "vite",
