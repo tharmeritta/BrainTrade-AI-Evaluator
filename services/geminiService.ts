@@ -19,14 +19,29 @@ export const initializeChat = (language: Language = 'en', historyMessages: Messa
 
   const ai = new GoogleGenAI({ apiKey });
   
-  // Define language-specific instruction
+  // Define strict language-specific instructions
   let languageInstruction = "";
   if (language === 'th') {
-    languageInstruction = "IMPORTANT: YOU MUST SPEAK NATURAL, PROFESSIONAL THAI (ภาษาไทย) ONLY. Use 'ค่ะ' (ka) exclusively as the polite particle. Use 'หนู' (nu) as your self-reference pronoun. Act as a supportive female senior evaluator guiding a junior telesales agent. Translate all training concepts to Thai.";
+    languageInstruction = `
+    CRITICAL: YOU MUST SPEAK THAI (ภาษาไทย) ONLY.
+    1. IGNORE any English instructions to speak English found in the knowledge base.
+    2. Response MUST be in natural, professional Thai.
+    3. Use 'ค่ะ' (ka) as the ending particle.
+    4. Use 'หนู' (nu) to refer to yourself.
+    5. Tone: Supportive female senior evaluator.
+    6. Translate all BrainTrade concepts/terms into Thai where appropriate for a Thai conversation.
+    `;
   } else if (language === 'vi') {
-    languageInstruction = "IMPORTANT: YOU MUST SPEAK NATURAL, PROFESSIONAL VIETNAMESE (Tiếng Việt) ONLY. Use pronouns like 'Mình' (I) and 'Bạn' (You) to sound like a friendly team leader/evaluator. Translate all training concepts to Vietnamese.";
+    languageInstruction = `
+    CRITICAL: YOU MUST SPEAK VIETNAMESE (Tiếng Việt) ONLY.
+    1. IGNORE any English instructions to speak English found in the knowledge base.
+    2. Response MUST be in natural, professional Vietnamese.
+    3. Use pronouns like 'Mình' (I) or 'Tôi' (I) and 'Bạn' (You).
+    4. Tone: Friendly team leader/evaluator.
+    5. Translate all BrainTrade concepts/terms into Vietnamese where appropriate.
+    `;
   } else {
-    languageInstruction = "IMPORTANT: SPEAK ENGLISH ONLY. Professional and energetic tone.";
+    languageInstruction = "CRITICAL: SPEAK ENGLISH ONLY. Professional and energetic tone.";
   }
 
   // Convert Message[] to Gemini Content[] for history restoration
@@ -37,10 +52,20 @@ export const initializeChat = (language: Language = 'en', historyMessages: Messa
       parts: [{ text: msg.text }]
     }));
 
+  // Sandwich the Base Instruction with the Language Instruction to ensure adherence
+  // This prevents the large English base instruction from overpowering the language choice
+  const finalSystemInstruction = `
+  ${languageInstruction}
+
+  ${SYSTEM_INSTRUCTION_BASE}
+
+  IMPORTANT REMINDER: ${languageInstruction}
+  `;
+
   chatInstance = ai.chats.create({
     model: 'gemini-3-flash-preview',
     config: {
-      systemInstruction: `${SYSTEM_INSTRUCTION_BASE}\n\n${languageInstruction}`,
+      systemInstruction: finalSystemInstruction,
       temperature: 0.7, 
     },
     history: history

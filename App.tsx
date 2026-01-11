@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, RefreshCw, Menu, X, Trophy, Type, Minus, Plus, ChevronUp, ChevronDown } from 'lucide-react';
+import { Send, RefreshCw, Menu, Trophy, Type, Minus, Plus, ChevronDown, Settings2 } from 'lucide-react';
 import { sendMessageStream, resetChat, initializeChat } from './services/geminiService';
 import { loadState, saveState, clearState } from './services/storageService';
 import { Message, Language } from './types';
@@ -9,14 +9,13 @@ import { TRANSLATIONS } from './constants';
 import { GenerateContentResponse } from '@google/genai';
 
 const LANGUAGES: { code: Language; label: string }[] = [
-  { code: 'en', label: 'English' },
-  { code: 'th', label: 'ไทย' },
-  { code: 'vi', label: 'Tiếng Việt' },
+  { code: 'en', label: 'EN' },
+  { code: 'th', label: 'TH' },
+  { code: 'vi', label: 'VN' },
 ];
 
-// 16px is the default browser base (1rem). We scale around it.
 const FONT_SIZES = ['14px', '16px', '18px', '20px', '22px'];
-const DEFAULT_FONT_INDEX = 1; // 16px
+const DEFAULT_FONT_INDEX = 1;
 
 const App: React.FC = () => {
   const [input, setInput] = useState('');
@@ -30,16 +29,15 @@ const App: React.FC = () => {
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const t = TRANSLATIONS[language];
 
-  // Update document title when language changes
   useEffect(() => {
     document.title = t.title;
   }, [t.title]);
 
-  // Load state on mount
   useEffect(() => {
     const restoreSession = async () => {
       const savedState = await loadState();
@@ -49,16 +47,12 @@ const App: React.FC = () => {
         setFontSizeIndex(savedState.fontSizeIndex);
         setMessages(savedState.messages);
         setIsHeaderVisible(savedState.isHeaderVisible ?? true);
-        
-        // Restore chat context with Google GenAI with history
-        // This ensures the AI remembers the conversation
         try {
           initializeChat(savedState.language, savedState.messages);
         } catch (e) {
           console.error("Failed to restore chat context", e);
         }
       } else {
-        // No saved state, start fresh
         startNewSession('en'); 
       }
       setIsRestoring(false);
@@ -66,7 +60,6 @@ const App: React.FC = () => {
     restoreSession();
   }, []);
 
-  // Save state on changes (Debounced by effect nature mostly, but runs on every update)
   useEffect(() => {
     if (!isRestoring && messages.length > 0) {
       saveState({
@@ -79,7 +72,6 @@ const App: React.FC = () => {
     }
   }, [messages, score, language, fontSizeIndex, isHeaderVisible, isRestoring]);
 
-  // Update root font size when index changes (Accessibility)
   useEffect(() => {
     document.documentElement.style.fontSize = FONT_SIZES[fontSizeIndex];
   }, [fontSizeIndex]);
@@ -89,8 +81,6 @@ const App: React.FC = () => {
       resetChat(lang);
       const currentT = TRANSLATIONS[lang];
       setScore(0);
-      
-      // Add initial greeting manually based on language
       setMessages([
         {
           id: 'init-1',
@@ -107,8 +97,13 @@ const App: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Smart scrolling: Scroll to TOP if it's a reset/init message, otherwise scroll to bottom
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length === 1 && messages[0].id === 'init-1') {
+      messagesContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      scrollToBottom();
+    }
   }, [messages]);
 
   const handleSend = async () => {
@@ -140,7 +135,6 @@ const App: React.FC = () => {
         const chunkText = c.text || '';
         fullText += chunkText;
         
-        // Parse Score Logic: Look for <<SCORE: XX>> tag
         let displayText = fullText;
         const scoreMatch = fullText.match(/<<SCORE:\s*(\d+)>>/);
         
@@ -149,7 +143,6 @@ const App: React.FC = () => {
           if (!isNaN(newScore)) {
              setScore(newScore);
           }
-          // Remove the tag from the UI text
           displayText = fullText.replace(/<<SCORE:\s*(\d+)>>/, '').trim();
         }
         
@@ -196,8 +189,6 @@ const App: React.FC = () => {
   const handleLanguageSwitch = (newLang: Language) => {
     if (newLang !== language) {
       setLanguage(newLang);
-      // We pass 0 messages to force a reset of the chat context for the new language
-      // But we call startNewSession which handles this.
       startNewSession(newLang);
     }
   };
@@ -218,218 +209,196 @@ const App: React.FC = () => {
     }
   };
 
-  // UI Threshold for "Success" visual state is 80% (The Trick)
   const isPassingVisual = score >= 80;
+
+  // --- COMPONENT: Settings Controls (Used in Desktop Header and Mobile Sidebar) ---
+  const SettingsControls = ({ isMobile = false }) => (
+    <div className={`flex ${isMobile ? 'flex-col gap-4' : 'items-center gap-3'}`}>
+      
+      {/* Language Switcher */}
+      <div className={`flex bg-white/5 rounded-lg p-1 border border-white/10 ${isMobile ? 'w-full' : ''}`}>
+        {LANGUAGES.map((l) => (
+          <button
+            key={l.code}
+            onClick={() => handleLanguageSwitch(l.code)}
+            className={`
+              relative px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-300
+              ${isMobile ? 'flex-1 py-3 text-sm' : ''}
+              ${language === l.code
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }
+            `}
+          >
+            {l.label}
+          </button>
+        ))}
+      </div>
+
+      <div className={`flex ${isMobile ? 'w-full gap-2' : 'gap-2'}`}>
+        {/* Font Controls */}
+        <div className={`flex items-center bg-white/5 rounded-lg p-1 border border-white/10 ${isMobile ? 'flex-1 justify-between px-2' : ''}`}>
+            <button 
+              onClick={() => handleFontSizeChange(-1)}
+              disabled={fontSizeIndex === 0}
+              className={`p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/10 disabled:opacity-30 transition-colors ${isMobile ? 'p-2' : ''}`}
+            >
+              <Minus size={isMobile ? 18 : 14} />
+            </button>
+            <div className="px-2 text-slate-300">
+              <Type size={isMobile ? 18 : 14} />
+            </div>
+            <button 
+              onClick={() => handleFontSizeChange(1)}
+              disabled={fontSizeIndex === FONT_SIZES.length - 1}
+              className={`p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/10 disabled:opacity-30 transition-colors ${isMobile ? 'p-2' : ''}`}
+            >
+              <Plus size={isMobile ? 18 : 14} />
+            </button>
+        </div>
+
+        {/* Reset Button */}
+        <button 
+          onClick={handleReset}
+          className={`
+            flex items-center justify-center gap-2 bg-white/5 border border-white/10 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-all
+            ${isMobile ? 'px-4' : 'p-2'}
+          `}
+          title="Restart Assessment"
+        >
+          <RefreshCw size={isMobile ? 20 : 16} />
+          {isMobile && <span className="text-sm font-medium">Reset</span>}
+        </button>
+      </div>
+    </div>
+  );
 
   if (isRestoring) {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-[#0f172a] text-white">
         <div className="flex flex-col items-center gap-4">
           <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm text-slate-400">Restoring session...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-[100dvh] bg-[#0f172a] overflow-hidden text-slate-100 font-sans">
+    <div className="flex h-[100dvh] bg-[#0f172a] overflow-hidden text-slate-100 font-sans selection:bg-indigo-500/30">
       
-      {/* Mobile Sidebar Overlay */}
+      {/* Mobile Sidebar & Settings Overlay */}
       {showMobileSidebar && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-20 lg:hidden" onClick={() => setShowMobileSidebar(false)}>
-          <div className="absolute right-0 top-0 bottom-0 w-80 z-30 shadow-2xl" onClick={e => e.stopPropagation()}>
-             <PackageReference language={language} onClose={() => setShowMobileSidebar(false)} />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 lg:hidden animate-in fade-in duration-200" onClick={() => setShowMobileSidebar(false)}>
+          <div className="absolute right-0 top-0 bottom-0 w-[85%] max-w-sm z-50 shadow-2xl animate-in slide-in-from-right duration-300" onClick={e => e.stopPropagation()}>
+             <PackageReference 
+                language={language} 
+                onClose={() => setShowMobileSidebar(false)}
+                mobileControls={<SettingsControls isMobile={true} />} 
+             />
           </div>
         </div>
       )}
 
-      {/* Main Chat Area */}
+      {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 bg-[#0f172a] relative">
         
-        {/* Floating Expand Button (Smooth Transition) */}
-        <div className={`absolute top-4 right-4 z-50 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+        {/* "Show Header" Floating Tab (Centered & Sleek) */}
+        <div className={`absolute left-1/2 -translate-x-1/2 z-40 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${
           !isHeaderVisible 
-            ? 'opacity-100 translate-y-0 scale-100' 
-            : 'opacity-0 -translate-y-4 scale-90 pointer-events-none'
+            ? 'top-2 opacity-100 translate-y-0' 
+            : '-top-10 opacity-0 -translate-y-4 pointer-events-none'
         }`}>
           <button
             onClick={() => setIsHeaderVisible(true)}
-            className="p-2 bg-slate-800/80 backdrop-blur-md text-slate-200 hover:text-white rounded-full shadow-lg border border-slate-700/50 transition-transform hover:scale-110 hover:bg-slate-700"
-            title="Show Top Bar"
+            className="flex items-center gap-2 px-4 py-1.5 bg-slate-800/90 backdrop-blur-md text-xs font-bold text-slate-400 hover:text-white rounded-full shadow-lg border border-white/10 hover:border-indigo-500/50 hover:bg-slate-800 transition-all group"
           >
-            <ChevronDown size={20} />
+            <ChevronDown size={14} className="group-hover:translate-y-0.5 transition-transform" />
+            <span>MENU</span>
           </button>
         </div>
 
-        {/* Header with Apple-like Smooth Transition */}
+        {/* --- UNIFIED HEADER --- */}
         <header 
-          className={`shrink-0 border-slate-800/60 bg-[#0f172a]/95 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-10 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          className={`shrink-0 z-30 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] relative ${
             isHeaderVisible 
-              ? 'max-h-48 py-4 opacity-100 translate-y-0 border-b' 
-              : 'max-h-0 py-0 opacity-0 -translate-y-2 border-b-0 pointer-events-none'
+              ? 'h-[72px] opacity-100 translate-y-0' 
+              : 'h-0 opacity-0 -translate-y-4 overflow-hidden border-b-0'
           }`}
         >
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
-              <span className="font-bold text-white text-lg">BT</span>
-            </div>
-            <div className={`transition-opacity duration-300 ${isHeaderVisible ? 'opacity-100' : 'opacity-0'}`}>
-              <h1 className="font-bold text-lg tracking-tight text-white">{t.title}</h1>
-              <p className="text-xs text-indigo-300 font-medium flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                {t.subtitle}
-              </p>
-            </div>
-          </div>
-          
-          <div className={`flex items-center gap-4 transition-opacity duration-300 ${isHeaderVisible ? 'opacity-100' : 'opacity-0'}`}>
+          <div className="h-full max-w-7xl mx-auto px-4 lg:px-6 flex items-center justify-between">
             
-            {/* Score Display (Desktop) */}
-            <div className="hidden md:flex flex-col items-end min-w-[100px]">
-              <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium mb-1">
-                <Trophy size={12} className={isPassingVisual ? "text-emerald-400" : "text-slate-500"} />
-                {t.score}
+            {/* 1. Left: Identity */}
+            <div className="flex items-center gap-3 w-1/4 min-w-fit">
+              <div className="w-9 h-9 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20 ring-1 ring-white/10">
+                <span className="font-bold text-white text-sm">BT</span>
               </div>
-              <div className="flex items-center gap-2 w-full">
-                <div className="h-2 w-24 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
-                  <div 
-                    className={`h-full transition-all duration-700 ease-out ${isPassingVisual ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-indigo-500'}`}
-                    style={{ width: `${score}%` }}
-                  />
+              <div className="hidden sm:block leading-tight">
+                <h1 className="font-bold text-sm tracking-wide text-white">{t.title}</h1>
+                <p className="text-[10px] text-indigo-300 font-medium tracking-wider uppercase">AI Evaluator</p>
+              </div>
+            </div>
+
+            {/* 2. Center: Score HUD (The Star of the Show) */}
+            <div className="flex-1 flex justify-center">
+              <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-1.5 flex items-center gap-3 pl-4 pr-2 shadow-inner min-w-[180px] sm:min-w-[240px] max-w-md w-full relative group">
+                  <div className="absolute inset-0 bg-indigo-500/5 rounded-2xl blur-md opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  
+                  <div className="flex flex-col items-start gap-0.5 min-w-fit relative z-10">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.score}</span>
+                  </div>
+
+                  <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden relative z-10">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_12px_rgba(99,102,241,0.6)] ${isPassingVisual ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-indigo-500 to-purple-500'}`}
+                      style={{ width: `${Math.max(5, score)}%` }}
+                    />
+                  </div>
+                  
+                  <div className="bg-slate-800 rounded-lg px-2.5 py-1 min-w-[3rem] text-center border border-white/5 relative z-10">
+                    <span className={`font-mono text-sm font-bold ${isPassingVisual ? 'text-emerald-400' : 'text-white'}`}>
+                      {score}%
+                    </span>
+                  </div>
+              </div>
+            </div>
+
+            {/* 3. Right: Actions & Tools */}
+            <div className="flex items-center justify-end gap-2 w-1/4 min-w-fit">
+              
+              {/* Desktop Controls (Hidden on Mobile) */}
+              <div className="hidden md:flex items-center">
+                 <SettingsControls />
+                 <div className="w-px h-6 bg-white/10 mx-3"></div>
+              </div>
+
+              {/* Mobile Menu Trigger (Opens Sidebar with Settings) */}
+              <button 
+                onClick={() => setShowMobileSidebar(true)}
+                className="lg:hidden p-2.5 text-slate-300 hover:text-white hover:bg-white/5 rounded-xl transition-all active:scale-95"
+              >
+                <div className="relative">
+                   <Settings2 size={20} />
+                   <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-indigo-500 rounded-full border-2 border-[#0f172a]"></div>
                 </div>
-                <span className={`font-mono font-bold text-sm ${isPassingVisual ? 'text-emerald-400' : 'text-white'}`}>{score}%</span>
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5 font-medium">{t.passingScore}</div>
-            </div>
-
-            {/* Font Size Controls (Desktop) */}
-            <div className="hidden sm:flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700/50">
-              <button 
-                onClick={() => handleFontSizeChange(-1)}
-                disabled={fontSizeIndex === 0}
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Decrease font size"
-              >
-                <Minus size={14} />
               </button>
-              <div className="px-2 flex items-center text-slate-300">
-                <Type size={16} />
-              </div>
+
+              {/* Collapse Button */}
               <button 
-                onClick={() => handleFontSizeChange(1)}
-                disabled={fontSizeIndex === FONT_SIZES.length - 1}
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Increase font size"
+                onClick={() => setIsHeaderVisible(false)}
+                className="hidden sm:flex p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                title="Hide Header"
               >
-                <Plus size={14} />
+                <div className="flex flex-col items-center gap-0.5">
+                  <div className="w-4 h-0.5 bg-current rounded-full"></div>
+                </div>
               </button>
             </div>
 
-            {/* Desktop Language Switcher */}
-            <div className="hidden sm:flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700/50 mr-2">
-              {LANGUAGES.map((l) => (
-                <button
-                  key={l.code}
-                  onClick={() => handleLanguageSwitch(l.code)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                    language === l.code
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
-                  }`}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
-
-            <button 
-              onClick={handleReset}
-              className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all duration-200"
-              title="Restart Assessment"
-            >
-              <RefreshCw size={20} />
-            </button>
-            
-            <button 
-              onClick={() => setShowMobileSidebar(true)}
-              className="lg:hidden p-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all duration-200"
-            >
-              <Menu size={20} />
-            </button>
-
-            {/* Collapse Header Button */}
-            <button 
-              onClick={() => setIsHeaderVisible(false)}
-              className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all duration-200"
-              title="Hide Top Bar"
-            >
-              <ChevronUp size={20} />
-            </button>
           </div>
         </header>
 
-        {/* Mobile Language Switcher & Controls */}
-        <div className="sm:hidden shrink-0 bg-slate-900/95 border-b border-slate-800 backdrop-blur">
-           <div className="px-4 py-3 flex flex-col gap-3">
-             <div className="flex gap-2">
-                {/* Mobile Language */}
-                <div className="flex-1 bg-slate-800 p-1 rounded-xl border border-slate-700/50 flex">
-                    {LANGUAGES.map((l) => (
-                      <button
-                        key={l.code}
-                        onClick={() => handleLanguageSwitch(l.code)}
-                        className={`flex-1 px-2 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                          language === l.code
-                            ? 'bg-indigo-600 text-white shadow-sm'
-                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
-                        }`}
-                      >
-                        {l.label}
-                      </button>
-                    ))}
-                </div>
-
-                {/* Mobile Font Controls */}
-                <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700/50">
-                    <button 
-                      onClick={() => handleFontSizeChange(-1)}
-                      disabled={fontSizeIndex === 0}
-                      className="p-2 text-slate-400 hover:text-white rounded-lg disabled:opacity-30"
-                    >
-                      <Minus size={14} />
-                    </button>
-                    <div className="px-1 text-slate-300">
-                      <Type size={14} />
-                    </div>
-                    <button 
-                      onClick={() => handleFontSizeChange(1)}
-                      disabled={fontSizeIndex === FONT_SIZES.length - 1}
-                      className="p-2 text-slate-400 hover:text-white rounded-lg disabled:opacity-30"
-                    >
-                      <Plus size={14} />
-                    </button>
-                </div>
-             </div>
-              
-              {/* Mobile Score Compact */}
-              <div className="flex items-center justify-between px-2">
-                 <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">{t.score}</span>
-                 <div className="flex items-center gap-3">
-                   <div className="h-1.5 w-24 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
-                      <div 
-                        className={`h-full transition-all duration-500 ${isPassingVisual ? 'bg-emerald-500' : 'bg-indigo-500'}`}
-                        style={{ width: `${score}%` }}
-                      />
-                   </div>
-                   <span className={`text-sm font-bold ${isPassingVisual ? 'text-emerald-400' : 'text-indigo-400'}`}>{score}%</span>
-                 </div>
-              </div>
-           </div>
-        </div>
-
         {/* Messages List */}
-        <div className="flex-1 overflow-y-auto min-h-0 px-4 lg:px-8 py-6 custom-scrollbar scroll-smooth">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto min-h-0 px-4 lg:px-8 py-6 custom-scrollbar scroll-smooth">
           <div className="max-w-4xl mx-auto w-full">
             {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
@@ -439,7 +408,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Input Area */}
-        <div className="shrink-0 p-4 lg:p-6 bg-[#0f172a] border-t border-slate-800/60">
+        <div className="shrink-0 p-4 lg:p-6 bg-[#0f172a] border-t border-slate-800/60 z-20">
           <div className="max-w-4xl mx-auto relative group">
             <input
               ref={inputRef}
@@ -449,7 +418,7 @@ const App: React.FC = () => {
               onKeyDown={handleKeyDown}
               placeholder={t.placeholder}
               disabled={isLoading}
-              className="w-full bg-slate-800/50 text-slate-100 rounded-2xl pl-6 pr-16 py-5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-slate-800 placeholder-slate-400 shadow-xl border border-slate-700/50 hover:border-slate-600 transition-all text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-slate-900/50 text-slate-100 rounded-2xl pl-6 pr-16 py-5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-slate-900 placeholder-slate-500 shadow-xl border border-white/5 hover:border-white/10 transition-all text-lg disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm"
             />
             <button
               onClick={handleSend}
@@ -459,14 +428,14 @@ const App: React.FC = () => {
               <Send size={20} />
             </button>
           </div>
-          <p className="text-center text-xs text-slate-500 mt-4 font-medium">
-            {t.disclaimer}
+          <p className="text-center text-[10px] uppercase tracking-widest text-slate-600 mt-4 font-bold">
+             BrainTrade Internal Training System
           </p>
         </div>
       </div>
 
-      {/* Desktop Sidebar */}
-      <div className="hidden lg:flex w-80 shrink-0 h-full border-l border-slate-800">
+      {/* Desktop Sidebar (Permanent) */}
+      <div className="hidden lg:flex w-80 shrink-0 h-full border-l border-white/5">
         <PackageReference language={language} />
       </div>
 
