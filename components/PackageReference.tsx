@@ -1,24 +1,35 @@
 import React from 'react';
 import { PACKAGES, TRANSLATIONS } from '../constants';
-import { Check, Info } from 'lucide-react';
+import { Check, Info, X } from 'lucide-react';
 import { Language } from '../types';
 
 interface PackageReferenceProps {
   language: Language;
+  onClose?: () => void;
 }
 
-export const PackageReference: React.FC<PackageReferenceProps> = ({ language }) => {
+export const PackageReference: React.FC<PackageReferenceProps> = ({ language, onClose }) => {
   const t = TRANSLATIONS[language];
   const currentPackages = PACKAGES[language];
 
   return (
-    <div className="hidden lg:flex flex-col w-80 bg-slate-900 border-l border-slate-800 h-full overflow-y-auto custom-scrollbar">
+    <div className="flex flex-col w-full h-full bg-slate-900 border-l border-slate-800 overflow-y-auto custom-scrollbar">
       <div className="p-6 border-b border-slate-800 bg-slate-900 sticky top-0 z-10">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <Info size={20} className="text-indigo-400" />
-          {t.packagesTitle}
-        </h2>
-        <p className="text-xs text-slate-400 mt-1">{t.packagesSubtitle}</p>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Info size={20} className="text-indigo-400" />
+            {t.packagesTitle}
+          </h2>
+          {onClose && (
+            <button 
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            >
+              <X size={20} />
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-slate-400">{t.packagesSubtitle}</p>
       </div>
       
       <div className="p-4 space-y-4">

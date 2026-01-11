@@ -9,6 +9,7 @@ export interface AppState {
   score: number;
   language: Language;
   fontSizeIndex: number;
+  isHeaderVisible?: boolean;
 }
 
 const openDB = (): Promise<IDBDatabase> => {
