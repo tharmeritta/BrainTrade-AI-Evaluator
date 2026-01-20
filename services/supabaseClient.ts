@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // Hardcoded fallbacks from user provision (Safe for client-side demo)
@@ -26,6 +27,9 @@ const FALLBACK_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
     phone text,
     created_at timestamp with time zone default timezone('utc'::text, now())
   );
+  
+  -- Enable Realtime for assessment_results
+  alter publication supabase_realtime add table assessment_results;
 */
 
 // Initialize Supabase Client
@@ -63,6 +67,7 @@ export interface AssessmentResult {
   status: string;
   language: string;
   updated_at?: string;
+  created_at?: string;
 }
 
 // --- Tool for Roleplay (User registration simulation) ---
@@ -168,4 +173,25 @@ export const fetchAdminReports = async (): Promise<AssessmentResult[]> => {
     console.error("Error fetching reports:", errorMsg);
     throw err;
   }
+};
+
+export const subscribeToAssessmentUpdates = (callback: (payload: any) => void) => {
+  if (!supabase) return { unsubscribe: () => {} };
+
+  const channel = supabase
+    .channel('realtime_assessments')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'assessment_results',
+      },
+      (payload: any) => {
+        callback(payload);
+      }
+    )
+    .subscribe();
+    
+  return channel;
 };
