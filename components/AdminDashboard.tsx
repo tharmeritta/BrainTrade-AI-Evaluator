@@ -108,7 +108,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
        };
 
        if (payload.eventType === 'INSERT') {
-         setReports(prev => sortByDate([payload.new, ...prev]));
+         setReports(prev => {
+             // CRITICAL FIX: Deduplicate to prevent React key errors if fetchAdminReports() already got this ID
+             if (prev.some(r => r.id === payload.new.id)) return prev;
+             return sortByDate([payload.new, ...prev]);
+         });
        } 
        else if (payload.eventType === 'UPDATE') {
          setReports(prev => sortByDate(prev.map(item => item.id === payload.new.id ? payload.new : item)));

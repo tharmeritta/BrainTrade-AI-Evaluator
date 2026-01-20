@@ -34,6 +34,7 @@ const App: React.FC = () => {
   const [fontSizeIndex, setFontSizeIndex] = useState(DEFAULT_FONT_INDEX);
   const [isRestoring, setIsRestoring] = useState(true);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  const [dbSessionId, setDbSessionId] = useState<number | undefined>(undefined);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -57,6 +58,7 @@ const App: React.FC = () => {
         setFontSizeIndex(savedState.fontSizeIndex);
         setMessages(savedState.messages);
         setIsHeaderVisible(savedState.isHeaderVisible ?? true);
+        setDbSessionId(savedState.dbSessionId);
         
         // Try to infer agent name from messages or storage if we had it (simplified for now)
         setView('chat');
@@ -81,10 +83,11 @@ const App: React.FC = () => {
         score,
         language,
         fontSizeIndex,
-        isHeaderVisible
+        isHeaderVisible,
+        dbSessionId
       });
     }
-  }, [messages, score, language, fontSizeIndex, isHeaderVisible, isRestoring, view]);
+  }, [messages, score, language, fontSizeIndex, isHeaderVisible, isRestoring, view, dbSessionId]);
 
   // Auto-scroll
   const scrollToBottom = () => {
@@ -117,8 +120,10 @@ const App: React.FC = () => {
     }
 
     // 3. Sync to Supabase if anything changed
-    if (agentName && (scoreMatch || feedbackMatch)) {
+    if (agentName && (scoreMatch || feedbackMatch || dbSessionId)) {
+      // We don't await this to keep UI snappy, but we ensure the ID is passed if we have it
       syncAssessmentProgress({
+        id: dbSessionId,
         agent_name: agentName,
         score: newScore,
         status: newScore >= 80 ? (newScore === 100 ? 'Certified' : 'Passed') : 'In Progress',
@@ -137,14 +142,18 @@ const App: React.FC = () => {
 
     setView('chat');
 
-    // Sync to Supabase immediately to start tracking "real-time"
-    syncAssessmentProgress({
+    // Sync to Supabase immediately to start tracking "real-time" and get Session ID
+    const newSessionId = await syncAssessmentProgress({
       agent_name: agentName.trim(),
       score: 0,
       status: 'In Progress',
       language: language,
       last_feedback: 'Started Assessment'
     });
+    
+    if (newSessionId) {
+      setDbSessionId(newSessionId);
+    }
     
     // Initial welcome logic
     const welcomeMsg: Message = {
@@ -236,10 +245,12 @@ const App: React.FC = () => {
       setMessages([]);
       setScore(0);
       setAgentName(''); // Reset name to force re-login or re-entry
+      setDbSessionId(undefined);
       await clearState();
       resetChat(language);
       
       setView('agent_login');
+      // If closing admin modal from chat, reset side effects are handled
     }
   };
 
@@ -247,6 +258,7 @@ const App: React.FC = () => {
       setMessages([]);
       setScore(0);
       setAgentName('');
+      setDbSessionId(undefined);
       await clearState();
       resetChat(language);
       setView('agent_login');
@@ -350,7 +362,11 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
         <div className="w-full max-w-sm bg-slate-900/80 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl">
           <div className="flex items-center gap-2 mb-6 text-slate-400">
-             <button onClick={() => setView('agent_login')} className="hover:text-white transition-colors">
+             <button 
+               onClick={() => agentName ? setView('chat') : setView('agent_login')} 
+               className="hover:text-white transition-colors"
+               title="Back"
+             >
                <ArrowLeft size={20} />
              </button>
              <span className="text-sm font-semibold uppercase tracking-wider">Admin Portal</span>
@@ -383,7 +399,7 @@ const App: React.FC = () => {
   if (view === 'admin_dashboard') {
     return (
       <div className="h-screen w-full bg-[#0f172a]">
-        <AdminDashboard onClose={() => setView('agent_login')} />
+        <AdminDashboard onClose={() => agentName ? setView('chat') : setView('agent_login')} />
       </div>
     );
   }
@@ -419,13 +435,22 @@ const App: React.FC = () => {
                 </button>
              </div>
              
-             <button 
-                onClick={handleReset}
-                className="p-2 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-900/20 rounded-lg transition-colors"
-                title="Restart Assessment"
-             >
-               <RefreshCw size={18} />
-             </button>
+             <div className="flex items-center gap-1">
+               <button 
+                  onClick={() => setView('admin_login')}
+                  className="p-2 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                  title="Admin Access"
+               >
+                 <Lock size={18} />
+               </button>
+               <button 
+                  onClick={handleReset}
+                  className="p-2 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-900/20 rounded-lg transition-colors"
+                  title="Restart Assessment"
+               >
+                 <RefreshCw size={18} />
+               </button>
+             </div>
           </div>
           <button 
             onClick={handleLogout}
@@ -464,6 +489,12 @@ const App: React.FC = () => {
                         </button>
                       </div>
                     </div>
+                    <button 
+                      onClick={() => setView('admin_login')}
+                      className="w-full py-2 bg-slate-800 text-slate-400 rounded-lg flex items-center justify-center gap-2"
+                    >
+                      <Lock size={16} /> Admin Access
+                    </button>
                     <button 
                       onClick={handleReset}
                       className="w-full py-2 bg-indigo-900/30 text-indigo-400 rounded-lg border border-indigo-500/30 flex items-center justify-center gap-2"

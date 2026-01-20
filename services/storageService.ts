@@ -1,3 +1,4 @@
+
 import { Message, Language } from '../types';
 
 const DB_NAME = 'BrainTradeAssessmentDB';
@@ -10,6 +11,7 @@ export interface AppState {
   language: Language;
   fontSizeIndex: number;
   isHeaderVisible?: boolean;
+  dbSessionId?: number; // Added to track specific DB row
 }
 
 const openDB = (): Promise<IDBDatabase> => {

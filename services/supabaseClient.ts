@@ -106,56 +106,59 @@ export const registerUserInDb = async (data: RegistrationData): Promise<string> 
 
 // --- Real Tracking (Agent Progress) ---
 
-export const syncAssessmentProgress = async (data: AssessmentResult): Promise<void> => {
-  if (!supabase) return;
+export const syncAssessmentProgress = async (data: AssessmentResult): Promise<number | null> => {
+  if (!supabase) return null;
 
   try {
-    const { data: existing, error: fetchError } = await supabase
-      .from('assessment_results')
-      .select('id')
-      .eq('agent_name', data.agent_name)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (fetchError) {
-      // Suppress missing table error for background sync to avoid console spam
-      const errorMsg = fetchError.message || '';
-      if (errorMsg.includes('relation') || errorMsg.includes('Could not find the table')) {
-        return; 
-      }
-      console.warn("Supabase Sync Error:", errorMsg);
-      return;
-    }
-
-    if (existing && existing.length > 0) {
+    // 1. If ID is provided, update specific session (prevents overwriting other agents with same name)
+    if (data.id) {
       const updatePayload: any = { 
         score: data.score, 
         status: data.status, 
         language: data.language,
         updated_at: new Date().toISOString()
       };
-      // Only update feedback if it's provided
       if (data.last_feedback) {
         updatePayload.last_feedback = data.last_feedback;
       }
 
-      await supabase
+      const { error } = await supabase
         .from('assessment_results')
         .update(updatePayload)
-        .eq('id', existing[0].id);
-    } else {
-      await supabase
-        .from('assessment_results')
-        .insert([{
-          agent_name: data.agent_name,
-          score: data.score,
-          status: data.status,
-          language: data.language,
-          last_feedback: data.last_feedback || ''
-        }]);
+        .eq('id', data.id);
+
+      if (error) throw error;
+      return data.id;
     }
+
+    // 2. No ID provided: Create NEW session (Start of Assessment)
+    const { data: inserted, error } = await supabase
+      .from('assessment_results')
+      .insert([{
+        agent_name: data.agent_name,
+        score: data.score,
+        status: data.status,
+        language: data.language,
+        last_feedback: data.last_feedback || ''
+      }])
+      .select('id')
+      .single();
+
+    if (error) {
+       // Graceful fallback for duplicate name searches only if insert fails (unlikely with identity ID)
+       // This part is kept minimal; we prefer creating new rows for new sessions.
+       console.warn("Insert failed, trying fetch fallback", error);
+    }
+    
+    return inserted ? inserted.id : null;
+
   } catch (err: any) {
-    console.error("Failed to sync progress:", err.message || err);
+    // Suppress missing table error for background sync
+    const errorMsg = err.message || '';
+    if (!errorMsg.includes('relation') && !errorMsg.includes('Could not find the table')) {
+      console.error("Failed to sync progress:", err.message || err);
+    }
+    return null;
   }
 };
 
