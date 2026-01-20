@@ -1,3 +1,4 @@
+
 export type Language = 'en' | 'th' | 'vi';
 
 export interface Message {
@@ -10,8 +11,7 @@ export interface Message {
 export interface PackageInfo {
   name: string;
   price: number;
-  courses: number;
-  ebooks: number;
-  tools: number;
-  features: string[];
+  duration: string;
+  aiQueries: number;
+  features?: string[]; // Optional specific highlights
 }

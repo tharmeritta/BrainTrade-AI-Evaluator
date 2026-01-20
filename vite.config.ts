@@ -10,7 +10,10 @@ export default defineConfig(({ mode }) => {
     base: './',
     define: {
       // Polyfill process.env.API_KEY for the app usage
-      'process.env.API_KEY': JSON.stringify(process.env.API_KEY || env.API_KEY)
+      'process.env.API_KEY': JSON.stringify(process.env.API_KEY || env.API_KEY),
+      // Polyfill Supabase keys so they are available via process.env fallback in the client
+      'process.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL),
+      'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY)
     },
     build: {
       outDir: 'dist',

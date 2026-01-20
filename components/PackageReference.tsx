@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { PACKAGES, TRANSLATIONS } from '../constants';
-import { Check, Info, X } from 'lucide-react';
+import { Info, X, Clock, Bot, CheckCircle2 } from 'lucide-react';
 import { Language } from '../types';
 
 interface PackageReferenceProps {
@@ -37,7 +38,7 @@ export const PackageReference: React.FC<PackageReferenceProps> = ({ language, on
           </div>
         )}
 
-        {/* Standard Title (Only show Close button here if no mobile controls were passed, to avoid double close buttons) */}
+        {/* Standard Title */}
         <div className="p-6 py-4">
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -56,53 +57,59 @@ export const PackageReference: React.FC<PackageReferenceProps> = ({ language, on
           <p className="text-xs text-slate-400">{t.packagesSubtitle}</p>
         </div>
       </div>
+
+      {/* Common Features Banner */}
+      <div className="px-4 pt-2 pb-2">
+        <div className="bg-indigo-900/20 border border-indigo-500/20 rounded-xl p-3">
+          <p className="text-[10px] text-indigo-200 leading-relaxed font-medium">
+            {t.commonFeatures}
+          </p>
+        </div>
+      </div>
       
       <div className="p-4 space-y-4">
         {currentPackages.map((pkg) => (
           <div key={pkg.name} className="bg-white/5 rounded-xl p-4 border border-white/5 hover:border-indigo-500/50 transition-colors group">
-            <div className="flex justify-between items-start mb-2">
-              <h3 className="font-bold text-indigo-300 group-hover:text-indigo-200 transition-colors">{pkg.name}</h3>
-              <span className="bg-slate-800 text-white text-xs font-mono px-2 py-1 rounded border border-white/10">
-                {t.price}{pkg.price}
+            <div className="flex justify-between items-start mb-3">
+              <h3 className="font-bold text-indigo-300 group-hover:text-indigo-200 transition-colors text-base">{pkg.name}</h3>
+              <span className="bg-slate-800 text-white text-sm font-mono px-2 py-1 rounded border border-white/10 font-bold">
+                {t.price}{pkg.price.toLocaleString()}
               </span>
             </div>
             
-            <div className="text-xs text-slate-300 space-y-2 mb-4">
-              <div className="flex justify-between border-b border-white/5 pb-1">
-                <span>{t.courses}</span>
-                <span className="text-white font-medium">{pkg.courses}</span>
+            <div className="space-y-3">
+              {/* Duration Row */}
+              <div className="flex items-center justify-between bg-slate-950/30 p-2 rounded-lg">
+                <div className="flex items-center gap-2 text-slate-400 text-xs">
+                  <Clock size={14} className="text-emerald-400" />
+                  <span>{t.duration}</span>
+                </div>
+                <span className="text-white text-sm font-medium">{pkg.duration}</span>
               </div>
-              <div className="flex justify-between border-b border-white/5 pb-1">
-                <span>{t.tools}</span>
-                <span className="text-white font-medium">{pkg.tools}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>{t.ebooks}</span>
-                <span className="text-white font-medium">{pkg.ebooks}</span>
+
+              {/* AI Queries Row */}
+              <div className="flex items-center justify-between bg-slate-950/30 p-2 rounded-lg">
+                <div className="flex items-center gap-2 text-slate-400 text-xs">
+                  <Bot size={14} className="text-purple-400" />
+                  <span>{t.aiQueries}</span>
+                </div>
+                <span className="text-white text-sm font-medium">{pkg.aiQueries}</span>
               </div>
             </div>
 
-            <div className="bg-slate-950/30 rounded-lg p-3 space-y-2">
-              {pkg.features.map((feat, idx) => (
-                <div key={idx} className="flex items-start text-[10px] text-slate-400 leading-tight">
-                  <Check size={10} className="text-emerald-400 mr-2 mt-0.5 shrink-0" />
-                  {feat}
-                </div>
-              ))}
+            {/* Visual Indicator for Tier (Optional subtle bar at bottom) */}
+            <div className="mt-3 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+               <div 
+                 className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 opacity-50" 
+                 style={{ width: `${(pkg.price / 3000) * 100}%` }}
+               ></div>
             </div>
           </div>
         ))}
       </div>
       
-      <div className="p-4 mt-auto border-t border-white/10">
-        <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 p-4 rounded-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 -mt-2 -mr-2 w-16 h-16 bg-white/5 rounded-full blur-xl"></div>
-          <p className="text-xs text-indigo-200 text-center relative z-10 leading-relaxed">
-            <strong className="text-white block mb-1">{t.bonusTitle}</strong>
-            {t.bonusDesc}
-          </p>
-        </div>
-      </div>
+      {/* Spacer to push content up if needed */}
+      <div className="p-4 mt-auto"></div>
     </div>
   );
 };
