@@ -4,7 +4,8 @@ import { fetchAdminReports, AssessmentResult, subscribeToAssessmentUpdates } fro
 import { 
   X, RefreshCw, Search, Trophy, CheckCircle2, Clock, Download, 
   AlertTriangle, Database, User, ChevronRight, BarChart3, 
-  Calendar, Globe, TrendingUp, Sparkles, AlertCircle, Activity
+  Calendar, Globe, TrendingUp, Sparkles, AlertCircle, Activity,
+  BrainCircuit, GraduationCap, Target
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -143,12 +144,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   // --- Handlers ---
   const handleExportCSV = () => {
     if (filteredReports.length === 0) return alert("No data to export");
-    const headers = ["Agent Name", "Language", "Score", "Status", "Last Updated"];
+    const headers = ["Agent Name", "Language", "Score", "Status", "Last Feedback", "Last Updated"];
     const rows = filteredReports.map(r => [
       `"${r.agent_name.replace(/"/g, '""')}"`,
       `"${r.language.toUpperCase()}"`,
       r.score,
       `"${r.score >= 80 ? 'Passed' : 'In Progress'}"`,
+      `"${(r.last_feedback || '').replace(/"/g, '""')}"`,
       `"${r.updated_at || ''}"`
     ]);
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -162,11 +164,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     document.body.removeChild(link);
   };
 
-  const getPerformanceFeedback = (score: number) => {
-    if (score >= 100) return "Outstanding! This agent has mastered all modules including complex objection handling.";
-    if (score >= 80) return "Solid performance. Ready for live calls, but verify minor details on backup payment flows.";
-    if (score >= 50) return "Showing promise. Needs work on the correct 'Package -> Demo' flow sequence.";
-    return "Needs immediate coaching. Focus on the core 'SmartBrain' hook and basic product knowledge.";
+  // --- Insight Logic ---
+  const getCoachingAction = (feedback: string, score: number) => {
+    if (score === 0) return "Initial onboarding needed. Ensure agent has accessed the Learning Portal.";
+    if (score >= 100) return "Ready for mentor role. Can support junior agents.";
+    
+    const lowerFeedback = feedback.toLowerCase();
+    
+    if (lowerFeedback.includes("smartbrain") || lowerFeedback.includes("intro")) 
+      return "Roleplay Opener: Focus on introducing SmartBrain AI before showing packages.";
+    
+    if (lowerFeedback.includes("package") || lowerFeedback.includes("price")) 
+      return "Review Pricing: Quiz agent on the 6 packages and specifically the middle 'View Demo' pivot.";
+      
+    if (lowerFeedback.includes("demo") || lowerFeedback.includes("academy")) 
+      return "Product Knowledge: Assign 'Demo Deep Dive' module. Agent must know the 7 sections.";
+      
+    if (lowerFeedback.includes("payment") || lowerFeedback.includes("deposit")) 
+      return "Compliance Risk: Review the 'Backup Payment' policy. Ensure they know to try Standard first.";
+      
+    if (lowerFeedback.includes("risk") || lowerFeedback.includes("psychology")) 
+      return "Sales Pitch: Agent missed the 'Risk Management' USP. This is key for handling 'I lost money before' objections.";
+      
+    return "General refresher on the Walkthrough Flow sequence required.";
   };
 
   return (
@@ -271,6 +291,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   score integer default 0,
   status text,
   language text,
+  last_feedback text,
   updated_at timestamp with time zone default timezone('utc'::text, now()),
   created_at timestamp with time zone default timezone('utc'::text, now())
 );`}
@@ -289,7 +310,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                   <tr className="bg-slate-800/50 text-xs uppercase tracking-wider text-slate-400 border-b border-white/5">
                     <th className="p-5 font-semibold">Agent</th>
                     <th className="p-5 font-semibold">Language</th>
-                    <th className="p-5 font-semibold">Status</th>
+                    <th className="p-5 font-semibold">Latest Mistake/Feedback</th>
                     <th className="p-5 font-semibold text-right">Score</th>
                     <th className="p-5 font-semibold text-center">Action</th>
                   </tr>
@@ -328,12 +349,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                            </span>
                         </td>
                         <td className="p-5">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${
-                             report.score >= 100 ? 'bg-amber-400/10 text-amber-400 border-amber-400/20' :
-                             report.score >= 80 ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20' :
-                             'bg-slate-700/50 text-slate-400 border-slate-600/30'
-                          }`}>
-                            {report.score >= 100 ? 'Certified Expert' : report.score >= 80 ? 'Passed' : 'In Progress'}
+                          <span className="text-sm text-slate-400 truncate block max-w-[200px]">
+                            {report.last_feedback ? (
+                              <span className="flex items-center gap-1 text-rose-400"><AlertCircle size={12}/> {report.last_feedback}</span>
+                            ) : (
+                              <span className="text-slate-600">-</span>
+                            )}
                           </span>
                         </td>
                         <td className="p-5 text-right">
@@ -380,7 +401,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                  <div>
                    <h2 className="text-xl font-bold text-white">{selectedAgent.agent_name}</h2>
                    <p className="text-sm text-slate-400 flex items-center gap-1">
-                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Active
+                     <span className={`w-2 h-2 rounded-full ${selectedAgent.score >= 80 ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                     {selectedAgent.score >= 80 ? 'Assessment Passed' : 'Needs Coaching'}
                    </p>
                  </div>
               </div>
@@ -414,32 +436,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                <div className="bg-slate-800/30 rounded-2xl p-6 border border-white/5 flex flex-col items-center">
                   <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Current Mastery Level</h3>
                   <ScoreGauge score={selectedAgent.score} />
-                  
-                  <div className={`mt-4 px-4 py-2 rounded-full text-sm font-bold border ${
-                    selectedAgent.score >= 80 
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                      : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
-                  }`}>
-                    {selectedAgent.score >= 100 ? 'Certified Expert 🏆' : selectedAgent.score >= 80 ? 'Exam Passed ✅' : 'Training In Progress 📚'}
-                  </div>
                </div>
 
-               {/* AI Analysis */}
+               {/* Feedback & Coaching Section (Enhanced) */}
                <div>
                   <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Sparkles size={14} className="text-purple-400" /> AI Performance Insight
+                    <BrainCircuit size={14} className="text-rose-400" /> Analysis & Mistakes
                   </h3>
-                  <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 p-4 rounded-xl border border-indigo-500/20">
-                    <p className="text-sm leading-relaxed text-indigo-100">
-                      {getPerformanceFeedback(selectedAgent.score)}
-                    </p>
+                  
+                  {/* Latest Feedback Block */}
+                  <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5 mb-4">
+                     <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold block mb-2">Latest AI Feedback</span>
+                     {selectedAgent.last_feedback ? (
+                       <p className="text-sm text-rose-300 font-medium flex items-start gap-2">
+                         <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                         "{selectedAgent.last_feedback}"
+                       </p>
+                     ) : (
+                       <p className="text-sm text-slate-400 italic">No specific mistakes recorded yet.</p>
+                     )}
                   </div>
+
+                  {/* Coaching Advice Block */}
+                  {selectedAgent.score < 100 && (
+                    <div className="bg-indigo-900/20 p-4 rounded-xl border border-indigo-500/20">
+                      <span className="text-[10px] text-indigo-400 uppercase tracking-wider font-bold block mb-2 flex items-center gap-1">
+                         <GraduationCap size={12} /> Team Leader Coaching Plan
+                      </span>
+                      <p className="text-sm text-indigo-100 leading-relaxed">
+                        {getCoachingAction(selectedAgent.last_feedback || '', selectedAgent.score)}
+                      </p>
+                    </div>
+                  )}
                </div>
 
                {/* Module Checklist (Simulated based on score tiers) */}
                <div>
                   <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <BarChart3 size={14} /> Module Progress
+                    <Target size={14} /> Module Progress
                   </h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
@@ -469,7 +503,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
             {/* Footer Actions */}
             <div className="p-4 border-t border-white/5 bg-slate-900">
                <button className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
-                 <AlertTriangle size={16} className="text-amber-400" /> Report Issue
+                 <AlertTriangle size={16} className="text-amber-400" /> Flag for Review
                </button>
             </div>
           </div>

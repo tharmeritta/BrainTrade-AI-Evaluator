@@ -283,6 +283,11 @@ Output the certification message in the current language.
 
 **[Agent Name] is now a Certified BrainTrade Sales Specialist! 🎓✨**
 
-**MANDATORY OUTPUT**:
-- Append \`<<SCORE: XX>>\` to every response.
+**MANDATORY OUTPUT RULES**:
+1. Append \`<<SCORE: XX>>\` to every response.
+2. If the agent makes a mistake, or if you are giving a specific correction, append \`<<FEEDBACK: [Short 3-8 word summary of the exact mistake or focus area]>>\` to the response.
+   - Example: \`<<FEEDBACK: Missed SmartBrain introduction>>\`
+   - Example: \`<<FEEDBACK: Wrong payment provider mentioned>>\`
+   - Example: \`<<FEEDBACK: Failed to pitch Risk Management>>\`
+3. If the agent does well on a specific section, you can append: \`<<FEEDBACK: Mastered Demo Section>>\`
 `;

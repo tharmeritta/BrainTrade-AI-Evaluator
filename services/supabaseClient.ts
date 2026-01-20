@@ -16,6 +16,7 @@ const FALLBACK_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
     score integer default 0,
     status text,
     language text,
+    last_feedback text,
     updated_at timestamp with time zone default timezone('utc'::text, now()),
     created_at timestamp with time zone default timezone('utc'::text, now())
   );
@@ -66,6 +67,7 @@ export interface AssessmentResult {
   score: number;
   status: string;
   language: string;
+  last_feedback?: string;
   updated_at?: string;
   created_at?: string;
 }
@@ -126,14 +128,20 @@ export const syncAssessmentProgress = async (data: AssessmentResult): Promise<vo
     }
 
     if (existing && existing.length > 0) {
+      const updatePayload: any = { 
+        score: data.score, 
+        status: data.status, 
+        language: data.language,
+        updated_at: new Date().toISOString()
+      };
+      // Only update feedback if it's provided
+      if (data.last_feedback) {
+        updatePayload.last_feedback = data.last_feedback;
+      }
+
       await supabase
         .from('assessment_results')
-        .update({ 
-          score: data.score, 
-          status: data.status, 
-          language: data.language,
-          updated_at: new Date().toISOString()
-        })
+        .update(updatePayload)
         .eq('id', existing[0].id);
     } else {
       await supabase
@@ -142,7 +150,8 @@ export const syncAssessmentProgress = async (data: AssessmentResult): Promise<vo
           agent_name: data.agent_name,
           score: data.score,
           status: data.status,
-          language: data.language
+          language: data.language,
+          last_feedback: data.last_feedback || ''
         }]);
     }
   } catch (err: any) {

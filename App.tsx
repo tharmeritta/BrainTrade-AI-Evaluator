@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, RefreshCw, Menu, Trophy, Type, Minus, Plus, ChevronDown, Settings2, Lock, UserCircle, ArrowLeft, LogOut } from 'lucide-react';
 import { sendMessageStream, resetChat, initializeChat } from './services/geminiService';
@@ -94,25 +95,39 @@ const App: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Handle Score Extraction
-  const updateScoreFromText = (text: string) => {
+  // Handle AI Response Parsing
+  const processAIResponse = (text: string) => {
+    let cleanText = text;
+    let newScore = score;
+    let extractedFeedback = "";
+
+    // 1. Extract Score: <<SCORE: 50>>
     const scoreMatch = text.match(/<<SCORE:\s*(\d+)>>/);
     if (scoreMatch) {
-      const newScore = parseInt(scoreMatch[1], 10);
+      newScore = parseInt(scoreMatch[1], 10);
       setScore(newScore);
-      
-      // Sync to Supabase
-      if (agentName) {
-        syncAssessmentProgress({
-          agent_name: agentName,
-          score: newScore,
-          status: newScore >= 80 ? (newScore === 100 ? 'Certified' : 'Passed') : 'In Progress',
-          language: language
-        });
-      }
-      return text.replace(/<<SCORE:\s*\d+>>/g, '').trim();
+      cleanText = cleanText.replace(/<<SCORE:\s*\d+>>/g, '');
     }
-    return text;
+
+    // 2. Extract Feedback: <<FEEDBACK: ...>>
+    const feedbackMatch = text.match(/<<FEEDBACK:\s*(.*?)>>/);
+    if (feedbackMatch) {
+      extractedFeedback = feedbackMatch[1].trim();
+      cleanText = cleanText.replace(/<<FEEDBACK:\s*.*?>>/g, '');
+    }
+
+    // 3. Sync to Supabase if anything changed
+    if (agentName && (scoreMatch || feedbackMatch)) {
+      syncAssessmentProgress({
+        agent_name: agentName,
+        score: newScore,
+        status: newScore >= 80 ? (newScore === 100 ? 'Certified' : 'Passed') : 'In Progress',
+        language: language,
+        last_feedback: extractedFeedback || undefined
+      });
+    }
+
+    return cleanText.trim();
   };
 
   // Login Handler
@@ -127,7 +142,8 @@ const App: React.FC = () => {
       agent_name: agentName.trim(),
       score: 0,
       status: 'In Progress',
-      language: language
+      language: language,
+      last_feedback: 'Started Assessment'
     });
     
     // Initial welcome logic
@@ -185,8 +201,8 @@ const App: React.FC = () => {
         ));
       }
 
-      // Final processing (remove score tag, update state)
-      const cleanText = updateScoreFromText(fullResponseText);
+      // Final processing (remove score/feedback tags, update state)
+      const cleanText = processAIResponse(fullResponseText);
       
       setMessages(prev => prev.map(msg => 
         msg.id === modelMessageId 
