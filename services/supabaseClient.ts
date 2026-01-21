@@ -162,6 +162,23 @@ export const syncAssessmentProgress = async (data: AssessmentResult): Promise<nu
   }
 };
 
+export const deleteAssessmentResult = async (id: number): Promise<boolean> => {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('assessment_results')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  } catch (err: any) {
+    console.error("Error deleting record:", err.message || err);
+    return false;
+  }
+};
+
 export const fetchAdminReports = async (): Promise<AssessmentResult[]> => {
   if (!supabase) return [];
 

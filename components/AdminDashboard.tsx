@@ -1,11 +1,11 @@
 
 import React, { useEffect, useState } from 'react';
-import { fetchAdminReports, AssessmentResult, subscribeToAssessmentUpdates } from '../services/supabaseClient';
+import { fetchAdminReports, AssessmentResult, subscribeToAssessmentUpdates, deleteAssessmentResult } from '../services/supabaseClient';
 import { 
   X, RefreshCw, Search, Trophy, CheckCircle2, Clock, Download, 
   AlertTriangle, Database, User, ChevronRight, BarChart3, 
   Calendar, Globe, TrendingUp, Sparkles, AlertCircle, Activity,
-  BrainCircuit, GraduationCap, Target
+  BrainCircuit, GraduationCap, Target, Trash2, Filter
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -75,6 +75,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<AssessmentResult | null>(null);
+  const [activeTab, setActiveTab] = useState<'ALL' | 'en' | 'th' | 'vi'>('ALL');
+  
+  // Custom Modal State
+  const [deleteModal, setDeleteModal] = useState<{isOpen: boolean, agent: AssessmentResult | null}>({isOpen: false, agent: null});
 
   const loadData = async () => {
     setLoading(true);
@@ -109,7 +113,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
 
        if (payload.eventType === 'INSERT') {
          setReports(prev => {
-             // CRITICAL FIX: Deduplicate to prevent React key errors if fetchAdminReports() already got this ID
+             // Deduplicate to prevent React key errors
              if (prev.some(r => r.id === payload.new.id)) return prev;
              return sortByDate([payload.new, ...prev]);
          });
@@ -134,15 +138,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   }, []);
 
   // --- Calculations ---
-  const filteredReports = reports.filter(r => 
-    r.agent_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredReports = reports.filter(r => {
+    const matchesSearch = r.agent_name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesTab = activeTab === 'ALL' || r.language === activeTab;
+    return matchesSearch && matchesTab;
+  });
 
   const stats = {
-    total: reports.length,
-    certified: reports.filter(r => r.score >= 100).length,
-    passed: reports.filter(r => r.score >= 80 && r.score < 100).length,
-    avgScore: reports.length > 0 ? Math.round(reports.reduce((a, b) => a + b.score, 0) / reports.length) : 0,
+    total: filteredReports.length,
+    certified: filteredReports.filter(r => r.score >= 100).length,
+    passed: filteredReports.filter(r => r.score >= 80 && r.score < 100).length,
+    avgScore: filteredReports.length > 0 ? Math.round(filteredReports.reduce((a, b) => a + b.score, 0) / filteredReports.length) : 0,
   };
 
   // --- Handlers ---
@@ -162,10 +168,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `braintrade_report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `braintrade_report_${activeTab}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Open Modal
+  const handleDeleteClick = (e: React.MouseEvent, agent: AssessmentResult) => {
+    e.stopPropagation(); // Prevent row selection logic
+    setDeleteModal({ isOpen: true, agent });
+  };
+
+  // Execute Delete
+  const confirmDelete = async () => {
+    if (!deleteModal.agent || !deleteModal.agent.id) return;
+    
+    const success = await deleteAssessmentResult(deleteModal.agent.id);
+    if (!success) {
+      alert("Failed to delete record. Please check permissions.");
+    }
+    // Close modal regardless of success (realtime will update UI if successful)
+    setDeleteModal({ isOpen: false, agent: null });
+    // If selected agent was the one deleted, clear selection
+    if (selectedAgent?.id === deleteModal.agent.id) {
+      setSelectedAgent(null);
+    }
   };
 
   // --- Insight Logic ---
@@ -194,7 +222,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="flex h-screen bg-[#0f172a] text-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#0f172a] text-slate-100 overflow-hidden font-sans relative">
       
       {/* Sidebar / Main Content Area */}
       <div className={`flex-1 flex flex-col h-full transition-all duration-300 ${selectedAgent ? 'mr-[400px]' : ''}`}>
@@ -236,7 +264,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
               value={stats.total} 
               icon={User} 
               colorClass="text-indigo-400" 
-              subtext="Registered in system"
+              subtext={activeTab === 'ALL' ? "All Departments" : `${activeTab.toUpperCase()} Department`}
             />
             <StatCard 
               title="Certified Experts" 
@@ -257,29 +285,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
               value={`${stats.avgScore}%`} 
               icon={TrendingUp} 
               colorClass="text-purple-400" 
-              subtext="Global Average"
+              subtext="Average Performance"
             />
           </div>
 
-          {/* Controls */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-between items-center mb-6">
-            <div className="relative w-full sm:w-96">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="Search agents..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all text-sm"
-              />
+          {/* Language Tabs & Filter */}
+          <div className="flex flex-col gap-6 mb-6">
+            <div className="flex items-center gap-2 bg-slate-800/50 p-1 rounded-xl w-fit border border-white/5">
+               <button 
+                 onClick={() => setActiveTab('ALL')}
+                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'ALL' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+               >
+                 All Groups
+               </button>
+               <button 
+                 onClick={() => setActiveTab('en')}
+                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'en' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+               >
+                 🇺🇸 English
+               </button>
+               <button 
+                 onClick={() => setActiveTab('th')}
+                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'th' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+               >
+                 🇹🇭 Thai
+               </button>
+               <button 
+                 onClick={() => setActiveTab('vi')}
+                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'vi' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+               >
+                 🇻🇳 Vietnam
+               </button>
             </div>
-            <button 
-              onClick={loadData}
-              className="flex items-center gap-2 px-4 py-2 text-indigo-400 hover:bg-indigo-900/20 rounded-lg transition-colors text-sm font-medium"
-            >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-              Refresh Data
-            </button>
+            
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+              <div className="relative w-full sm:w-96">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Search agents by name..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all text-sm"
+                />
+              </div>
+              <button 
+                onClick={loadData}
+                className="flex items-center gap-2 px-4 py-2 text-indigo-400 hover:bg-indigo-900/20 rounded-lg transition-colors text-sm font-medium"
+              >
+                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                Refresh Data
+              </button>
+            </div>
           </div>
 
           {/* Database Missing Error */}
@@ -313,7 +370,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                 <thead>
                   <tr className="bg-slate-800/50 text-xs uppercase tracking-wider text-slate-400 border-b border-white/5">
                     <th className="p-5 font-semibold">Agent</th>
-                    <th className="p-5 font-semibold">Language</th>
+                    <th className="p-5 font-semibold">Group</th>
                     <th className="p-5 font-semibold">Latest Mistake/Feedback</th>
                     <th className="p-5 font-semibold text-right">Score</th>
                     <th className="p-5 font-semibold text-center">Action</th>
@@ -348,8 +405,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                           </div>
                         </td>
                         <td className="p-5">
-                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800 border border-white/5 text-xs text-slate-300 font-mono uppercase">
-                             <Globe size={10} /> {report.language}
+                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md border text-xs font-bold font-mono uppercase shadow-sm ${
+                             report.language === 'en' ? 'bg-blue-900/30 border-blue-500/30 text-blue-300' :
+                             report.language === 'th' ? 'bg-amber-900/30 border-amber-500/30 text-amber-300' :
+                             'bg-rose-900/30 border-rose-500/30 text-rose-300'
+                           }`}>
+                             <Globe size={10} /> {report.language === 'vi' ? 'VIETNAM' : report.language.toUpperCase()}
                            </span>
                         </td>
                         <td className="p-5">
@@ -367,9 +428,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                           }`}>{report.score}%</span>
                         </td>
                         <td className="p-5 text-center">
-                           <button className="p-2 rounded-full bg-slate-800 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                             <ChevronRight size={16} />
-                           </button>
+                           <div className="flex items-center justify-center gap-2">
+                             <button 
+                               onClick={(e) => handleDeleteClick(e, report)}
+                               className="p-2 rounded-lg text-slate-500 hover:bg-rose-500/10 hover:text-rose-400 transition-colors"
+                               title="Delete Record"
+                             >
+                               <Trash2 size={16} />
+                             </button>
+                             <button className="p-2 rounded-full bg-slate-800 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                               <ChevronRight size={16} />
+                             </button>
+                           </div>
                         </td>
                       </tr>
                     ))
@@ -505,9 +575,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
             </div>
 
             {/* Footer Actions */}
-            <div className="p-4 border-t border-white/5 bg-slate-900">
+            <div className="p-4 border-t border-white/5 bg-slate-900 space-y-3">
                <button className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
                  <AlertTriangle size={16} className="text-amber-400" /> Flag for Review
+               </button>
+               <button 
+                  onClick={(e) => selectedAgent && handleDeleteClick(e, selectedAgent)}
+                  className="w-full py-3 bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 border border-rose-900/50 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={16} /> Delete Record
                </button>
             </div>
           </div>
@@ -517,6 +593,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.isOpen && deleteModal.agent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-6 max-w-md w-full shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 bg-rose-500/10 rounded-full flex items-center justify-center mb-4 border border-rose-500/20">
+              <AlertTriangle className="text-rose-500" size={24} />
+            </div>
+            
+            <h3 className="text-xl font-bold text-white mb-2">Delete Agent Record?</h3>
+            <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+              You are about to permanently delete the assessment data for <span className="text-white font-semibold">{deleteModal.agent.agent_name}</span>. 
+              This action cannot be undone.
+            </p>
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setDeleteModal({isOpen: false, agent: null})}
+                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDelete}
+                className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <Trash2 size={18} /> Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
