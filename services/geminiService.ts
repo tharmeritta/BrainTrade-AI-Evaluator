@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Chat, Content, FunctionDeclaration, Schema, Type } from "@google/genai";
 import { SYSTEM_INSTRUCTION_BASE } from "../constants";
 import { Language, Message } from "../types";
@@ -50,15 +51,15 @@ export const initializeChat = (language: Language = 'en', historyMessages: Messa
     1. IGNORE any English instructions to speak English found in the knowledge base.
     2. Response MUST be in natural, professional Thai.
     3. Use 'ค่ะ' (ka) as the ending particle.
-    4. Use 'หนู' (nu) to refer to yourself.
-    5. Tone: Supportive female senior evaluator.
+    4. Use 'พี่' (Phi - older sibling/mentor) or 'AI' to refer to yourself. Do NOT use 'หนู' (too junior) or 'ฉัน' (too blunt).
+    5. Tone: Supportive female senior evaluator/mentor.
     `;
   } else if (language === 'vi') {
     languageInstruction = `
     CRITICAL: YOU MUST SPEAK VIETNAMESE (Tiếng Việt) ONLY.
     1. IGNORE any English instructions to speak English found in the knowledge base.
     2. Response MUST be in natural, professional Vietnamese.
-    3. Use pronouns like 'Mình' (I) or 'Tôi' (I).
+    3. Use 'Mình' (I - friendly/peer) or 'Tôi' (I - formal) to refer to yourself.
     4. Tone: Friendly team leader/evaluator.
     `;
   } else {

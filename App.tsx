@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, RefreshCw, Menu, Trophy, Type, Minus, Plus, ChevronDown, Settings2, Lock, UserCircle, ArrowLeft, LogOut } from 'lucide-react';
+import { Send, RefreshCw, Menu, Trophy, Type, Minus, Plus, ChevronDown, Settings2, Lock, UserCircle, ArrowLeft, LogOut, Loader2 } from 'lucide-react';
 import { sendMessageStream, resetChat, initializeChat } from './services/geminiService';
 import { loadState, saveState, clearState } from './services/storageService';
 import { syncAssessmentProgress } from './services/supabaseClient';
@@ -31,6 +31,7 @@ const App: React.FC = () => {
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [language, setLanguage] = useState<Language>('en');
   const [score, setScore] = useState(0);
+  const [quizProgress, setQuizProgress] = useState({ current: 0, total: 50 });
   const [fontSizeIndex, setFontSizeIndex] = useState(DEFAULT_FONT_INDEX);
   const [isRestoring, setIsRestoring] = useState(true);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
@@ -55,6 +56,7 @@ const App: React.FC = () => {
       if (savedState && savedState.messages.length > 0) {
         setLanguage(savedState.language);
         setScore(savedState.score);
+        setQuizProgress(savedState.quizProgress || { current: 0, total: 50 });
         setFontSizeIndex(savedState.fontSizeIndex);
         setMessages(savedState.messages);
         setIsHeaderVisible(savedState.isHeaderVisible ?? true);
@@ -84,10 +86,11 @@ const App: React.FC = () => {
         language,
         fontSizeIndex,
         isHeaderVisible,
-        dbSessionId
+        dbSessionId,
+        quizProgress
       });
     }
-  }, [messages, score, language, fontSizeIndex, isHeaderVisible, isRestoring, view, dbSessionId]);
+  }, [messages, score, language, fontSizeIndex, isHeaderVisible, isRestoring, view, dbSessionId, quizProgress]);
 
   // Auto-scroll
   const scrollToBottom = () => {
@@ -103,6 +106,7 @@ const App: React.FC = () => {
     let cleanText = text;
     let newScore = score;
     let extractedFeedback = "";
+    let newProgress = quizProgress;
 
     // 1. Extract Score: <<SCORE: 50>>
     const scoreMatch = text.match(/<<SCORE:\s*(\d+)>>/);
@@ -112,16 +116,26 @@ const App: React.FC = () => {
       cleanText = cleanText.replace(/<<SCORE:\s*\d+>>/g, '');
     }
 
-    // 2. Extract Feedback: <<FEEDBACK: ...>>
+    // 2. Extract Progress: <<PROGRESS: 5/50>>
+    const progressMatch = text.match(/<<PROGRESS:\s*(\d+)\/(\d+)>>/);
+    if (progressMatch) {
+      newProgress = {
+        current: parseInt(progressMatch[1], 10),
+        total: parseInt(progressMatch[2], 10)
+      };
+      setQuizProgress(newProgress);
+      cleanText = cleanText.replace(/<<PROGRESS:\s*\d+\/\d+>>/g, '');
+    }
+
+    // 3. Extract Feedback: <<FEEDBACK: ...>>
     const feedbackMatch = text.match(/<<FEEDBACK:\s*(.*?)>>/);
     if (feedbackMatch) {
       extractedFeedback = feedbackMatch[1].trim();
       cleanText = cleanText.replace(/<<FEEDBACK:\s*.*?>>/g, '');
     }
 
-    // 3. Sync to Supabase if anything changed
+    // 4. Sync to Supabase if anything changed
     if (agentName && (scoreMatch || feedbackMatch || dbSessionId)) {
-      // We don't await this to keep UI snappy, but we ensure the ID is passed if we have it
       syncAssessmentProgress({
         id: dbSessionId,
         agent_name: agentName,
@@ -162,6 +176,7 @@ const App: React.FC = () => {
       text: t.welcomeMessage
     };
     setMessages([welcomeMsg]);
+    setQuizProgress({ current: 0, total: 50 });
     
     // Initialize Chat Service
     initializeChat(language, []);
@@ -244,6 +259,7 @@ const App: React.FC = () => {
     if (confirm(t.resetConfirm)) {
       setMessages([]);
       setScore(0);
+      setQuizProgress({ current: 0, total: 50 });
       setAgentName(''); // Reset name to force re-login or re-entry
       setDbSessionId(undefined);
       await clearState();
@@ -257,6 +273,7 @@ const App: React.FC = () => {
   const handleLogout = async () => {
       setMessages([]);
       setScore(0);
+      setQuizProgress({ current: 0, total: 50 });
       setAgentName('');
       setDbSessionId(undefined);
       await clearState();
@@ -539,7 +556,21 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-6">
+              {/* Progress Bar (Scenarios) */}
+              <div className="flex flex-col items-end min-w-[100px]">
+                 <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+                   <Loader2 size={10} className="text-indigo-400" /> Progress {quizProgress.current}/{quizProgress.total}
+                 </div>
+                 <div className="w-28 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                   <div 
+                     className="h-full rounded-full transition-all duration-500 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
+                     style={{ width: `${Math.min(100, (quizProgress.current / quizProgress.total) * 100)}%` }}
+                   />
+                 </div>
+              </div>
+
+              {/* Mastery Score */}
               <div className="flex flex-col items-end">
                 <div className="flex items-center gap-2">
                   <span className="text-xs uppercase font-bold text-slate-500">{t.score}</span>

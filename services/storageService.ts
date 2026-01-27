@@ -11,7 +11,8 @@ export interface AppState {
   language: Language;
   fontSizeIndex: number;
   isHeaderVisible?: boolean;
-  dbSessionId?: number; // Added to track specific DB row
+  dbSessionId?: number;
+  quizProgress?: { current: number; total: number }; // Added progress tracking
 }
 
 const openDB = (): Promise<IDBDatabase> => {
